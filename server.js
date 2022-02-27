@@ -1,7 +1,11 @@
 import { slashtagsPayServer } from './index.js';
 
 const mockCB = (request = { amount: 100, description: 'foo' }) => {
-  return 'this is an ln invoice for ' + JSON.stringify(request);
+  return {
+    error: false,
+    method: 'bolt11',
+    data: 'this is an ln invoice for ' + JSON.stringify(request),
+  };
 };
 
 (async () => {

@@ -7,6 +7,8 @@ import b4a from 'b4a';
 import chalk from 'chalk';
 import cliSpinners from 'cli-spinners';
 import logUpdate from 'log-update';
+import inquirer from 'inquirer';
+import fs from 'fs';
 
 export const slashtagsPayServer = async (callback) => {
   const dht = await DHT.create({});
@@ -20,7 +22,15 @@ export const slashtagsPayServer = async (callback) => {
     noiseSocket.on('open', () => {
       noiseSocket.on('data', async (data) => {
         const request = JSON.parse(data.toString());
-        console.log('\n>> received request:\n   ', chalk.green.bold(data));
+        console.log(
+          '\n>> received request:\n   ',
+          'pay:',
+          chalk.green.bold(request.amount),
+          'sats, over:',
+          chalk.green.bold(request.methods.join(' or ')),
+          '\n    with description:',
+          chalk.green(request.description),
+        );
         const response = await callback(request);
         noiseSocket.write(Buffer.from(JSON.stringify(response)));
       });
@@ -32,7 +42,7 @@ export const slashtagsPayServer = async (callback) => {
   const address = 'hyper:peer://' + b4a.toString(keyPair.publicKey, 'hex');
   console.log(
     '\n>> Lightning node listening on:\n   ',
-    chalk.green.bold(address),
+    chalk.blue.bold(address),
   );
 
   const core = corestore.get({
@@ -51,21 +61,88 @@ export const slashtagsPayServer = async (callback) => {
   });
 
   const slashtag = formatDidUri(core.key);
-  console.log('\n>> Added the new address to:\n   ', chalk.red.bold(slashtag));
+  console.log(
+    '\n>> Added the new address to:\n   ',
+    chalk.yellow.bold(slashtag),
+  );
   return slashtag;
 };
 
-export const slashtagsPayClient = async (slashtag, request) => {
+export const slashtagsPayClient = async () => {
+  let lasttime = {};
+  try {
+    const json = await fs.readFileSync('cached-choices.json', 'utf8');
+    lasttime = JSON.parse(json);
+  } catch (error) {}
+
+  const answers = inquirer.prompt([
+    {
+      type: 'input',
+      name: 'slashtag',
+      message: 'Select a Slashtag to pay',
+      default: lasttime.slashtag || '',
+    },
+    {
+      type: 'list',
+      name: 'preferedMethod',
+      message: 'Select your prefered payment method',
+      choices: ['bolt11', 'p2wpkh', 'p2sh', 'p2pkh'],
+      default: 'bolt11',
+    },
+    {
+      type: 'list',
+      name: 'fallbackMethod',
+      message: 'Select an alternative payment method',
+      choices: ['bolt11', 'p2wpkh', 'p2sh', 'p2pkh'],
+      default: 'p2wpkh',
+    },
+    {
+      type: 'input',
+      name: 'amount',
+      message: 'Enter the amount to pay',
+      default: lasttime.amount || 21000000,
+    },
+    {
+      type: 'input',
+      name: 'description',
+      message: 'Enter a description',
+      default: lasttime.description || 'Parting with my dear sats',
+    },
+    {
+      type: 'input',
+      name: 'cache',
+      message: 'Use cached slashtag document instead of resolving it Y/n',
+      default: 'Y',
+    },
+  ]);
+
   const dht = await DHT.create({ relays: ['wss://dht-relay.synonym.to'] });
-  const corestore = new Corestore(RAM);
+  const corestore = new Corestore('client-store');
   await corestore.ready();
   const swarm = new Hyperswarm({ dht });
 
   swarm.on('connection', (connection, info) => corestore.replicate(connection));
 
+  const {
+    slashtag,
+    amount,
+    description,
+    cache,
+    preferedMethod,
+    fallbackMethod,
+  } = await answers;
+
+  try {
+    fs.writeFile(
+      'cached-choices.json',
+      JSON.stringify({ slashtag, amount, description }),
+      () => {},
+    );
+  } catch (error) {}
+
   console.log(
     '\n>> Resolving slashtags document for:\n   ',
-    chalk.red.bold(slashtag),
+    chalk.yellow.bold(slashtag),
   );
 
   const { key } = parseDidUri(slashtag);
@@ -73,22 +150,23 @@ export const slashtagsPayClient = async (slashtag, request) => {
   const core = corestore.get({ key, valueEncoding: 'json' });
   await core.ready();
 
-  await swarm.join(core.discoveryKey, { server: false, client: true });
+  if (core.length === 0 || cache.toLowerCase() === 'n') {
+    await swarm.join(core.discoveryKey, { server: false, client: true });
+    const spinner = cliSpinners['moon'];
+    let i = 0;
 
-  const spinner = cliSpinners['moon'];
-  let i = 0;
+    const interval = setInterval(() => {
+      const { frames } = spinner;
+      logUpdate('   ' + frames[(i = ++i % frames.length)] + ' Resolving...');
+    }, spinner.interval);
 
-  const interval = setInterval(() => {
-    const { frames } = spinner;
-    logUpdate('   ' + frames[(i = ++i % frames.length)] + ' Resolving...');
-  }, spinner.interval);
+    await swarm.flush();
+    clearInterval(interval);
+    await core.update();
 
-  await swarm.flush();
-  clearInterval(interval);
-  await core.update();
-
-  if (core.length === 0) {
-    throw new Error('No slashtags document found for' + slashtag);
+    if (core.length === 0) {
+      throw new Error('No slashtags document found for' + slashtag);
+    }
   }
 
   const latest = await core.get(core.length - 1);
@@ -103,7 +181,7 @@ export const slashtagsPayClient = async (slashtag, request) => {
 
   console.log(
     '\n>> Connecting slashtags pay address:\n   ',
-    chalk.green.bold(slashpay.serviceEndpoint),
+    chalk.blue.bold(slashpay.serviceEndpoint),
   );
 
   const swarmAddress = slashpay.serviceEndpoint.replace('hyper:peer://', '');
@@ -119,14 +197,29 @@ export const slashtagsPayClient = async (slashtag, request) => {
 
   return new Promise((resolve) => {
     noiseSocket.on('open', function () {
-      noiseSocket.write(JSON.stringify(request));
+      noiseSocket.write(
+        JSON.stringify({
+          methods: [preferedMethod, fallbackMethod],
+          amount,
+          description,
+        }),
+      );
 
       noiseSocket.on('data', (data) => {
+        const response = JSON.parse(data.toString());
+
+        if (response.error) {
+          console.log('\n>> Got an error:\n   ', chalk.bold.red(response.data));
+          resolve(response.data.toString());
+          return;
+        }
         console.log(
-          '\n>> Got LN invoice:\n   ',
-          chalk.bold.green(JSON.parse(data.toString())),
+          '\n>> Got ',
+          chalk.bold.green(response.method),
+          ':\n   ',
+          chalk.bold.green(response.data),
         );
-        resolve(data.toString());
+        resolve(response.data.toString());
       });
     });
   });
