@@ -18,7 +18,7 @@ export const slashtagsPayServer = async (callback) => {
 
   swarm.on('connection', (connection, info) => corestore.replicate(connection));
 
-  const serever = dht.createServer((noiseSocket) => {
+  const server = dht.createServer((noiseSocket) => {
     noiseSocket.on('open', () => {
       noiseSocket.on('data', async (data) => {
         const request = JSON.parse(data.toString());
@@ -31,13 +31,19 @@ export const slashtagsPayServer = async (callback) => {
           '\n    with description:',
           chalk.green(request.description),
         );
-        const response = await callback(request);
-        noiseSocket.write(Buffer.from(JSON.stringify(response)));
+        callback(
+          request,
+          (invoice) => noiseSocket.write(Buffer.from(JSON.stringify(invoice))),
+          (reciept) => {
+            console.log('sending reciept');
+            noiseSocket.write(Buffer.from(JSON.stringify(reciept)));
+          },
+        );
       });
     });
   });
   const keyPair = DHT.keyPair();
-  serever.listen(keyPair);
+  server.listen(keyPair);
 
   const address = 'hyper:peer://' + b4a.toString(keyPair.publicKey, 'hex');
   console.log(
@@ -84,8 +90,8 @@ export const slashtagsPayClient = async () => {
     },
     {
       type: 'list',
-      name: 'preferedMethod',
-      message: 'Select your prefered payment method',
+      name: 'preferredMethod',
+      message: 'Select your preferred payment method',
       choices: ['bolt11', 'p2wpkh', 'p2sh', 'p2pkh'],
       default: 'bolt11',
     },
@@ -110,9 +116,9 @@ export const slashtagsPayClient = async () => {
     },
     {
       type: 'input',
-      name: 'cache',
-      message: 'Use cached slashtag document instead of resolving it Y/n',
-      default: 'Y',
+      name: 'skipCache',
+      message: 'Skip cache y/N',
+      default: 'N',
     },
   ]);
 
@@ -127,8 +133,8 @@ export const slashtagsPayClient = async () => {
     slashtag,
     amount,
     description,
-    cache,
-    preferedMethod,
+    skipCache,
+    preferredMethod,
     fallbackMethod,
   } = await answers;
 
@@ -150,7 +156,7 @@ export const slashtagsPayClient = async () => {
   const core = corestore.get({ key, valueEncoding: 'json' });
   await core.ready();
 
-  if (core.length === 0 || cache.toLowerCase() === 'n') {
+  if (core.length === 0 || skipCache.toLowerCase() === 'y') {
     const timerLabel = '         resolved in';
     console.time(timerLabel);
     await swarm.join(core.discoveryKey, { server: false, client: true });
@@ -200,14 +206,18 @@ export const slashtagsPayClient = async () => {
 
   return new Promise((resolve) => {
     noiseSocket.on('error', (error) => {
-      console.log('>> ', chalk.red.bold(error.message));
+      console.log(
+        '>> ',
+        chalk.red.bold(error.message),
+        chalk.red.bold('please try again with skipping cache'),
+      );
       resolve();
     });
 
     noiseSocket.on('open', function () {
       noiseSocket.write(
         JSON.stringify({
-          methods: [preferedMethod, fallbackMethod],
+          methods: [preferredMethod, fallbackMethod],
           amount,
           description,
         }),
@@ -216,8 +226,20 @@ export const slashtagsPayClient = async () => {
       noiseSocket.on('data', (data) => {
         const response = JSON.parse(data.toString());
 
-        if (response.error) {
+        if (response.error === true) {
           console.log('\n>> Got an error:\n   ', chalk.bold.red(response.data));
+          resolve(response.data.toString());
+          return;
+        } else if (response.orderId !== undefined) {
+          console.log(
+            '\n>> Got a receipt for:',
+            chalk.green.bold(amount),
+            'sats',
+            '\n     orderId:',
+            chalk.green.bold(response.orderId),
+            '\n     receipt:',
+            chalk.green.bold(response.data),
+          );
           resolve(response.data.toString());
           return;
         }
@@ -227,7 +249,6 @@ export const slashtagsPayClient = async () => {
           ':\n   ',
           chalk.bold.green(response.data),
         );
-        resolve(response.data.toString());
       });
     });
   });

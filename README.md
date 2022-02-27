@@ -18,6 +18,11 @@ slashpay
 
 ### Server side
 
+```js
+const implementation = async (data, onInvoice, onReceipt) => {};
+slashtagsPayServer(implementation);
+```
+
 This repo provides a way to resolve a Slashtag to a hyperswarm DHT server, but does not implement the payment methods logic.
 
 Check how to configure the full server at the [demo server ](https://github.com/synonymdev/slash-pay-demo-server)
