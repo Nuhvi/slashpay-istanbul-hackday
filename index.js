@@ -151,6 +151,8 @@ export const slashtagsPayClient = async () => {
   await core.ready();
 
   if (core.length === 0 || cache.toLowerCase() === 'n') {
+    const timerLabel = '         resolved in';
+    console.time(timerLabel);
     await swarm.join(core.discoveryKey, { server: false, client: true });
     const spinner = cliSpinners['moon'];
     let i = 0;
@@ -167,6 +169,7 @@ export const slashtagsPayClient = async () => {
     if (core.length === 0) {
       throw new Error('No slashtags document found for' + slashtag);
     }
+    console.timeEnd(timerLabel);
   }
 
   const latest = await core.get(core.length - 1);
@@ -196,6 +199,11 @@ export const slashtagsPayClient = async () => {
   const noiseSocket = dht.connect(Buffer.from(swarmAddress, 'hex'));
 
   return new Promise((resolve) => {
+    noiseSocket.on('error', (error) => {
+      console.log('>> ', chalk.red.bold(error.message));
+      resolve();
+    });
+
     noiseSocket.on('open', function () {
       noiseSocket.write(
         JSON.stringify({

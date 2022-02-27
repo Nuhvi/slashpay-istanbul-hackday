@@ -5,28 +5,19 @@
 ## Install
 
 ```
-npm i lightning-hackday-slashtags-pay
+npm i -g hackday-slashpay
 ```
 
 ## Usage
 
-### Server side
-
-```js
-import { slashtagsPayServer } from './index.js';
-
-const lnNodeResponse = (request = { amount: 100, description: 'foo' }) => {
-  console.log('got request', request);
-  return 'this is an ln invoice for ' + JSON.stringify(request);
-};
-
-const slashtag = slahtagsPayServer(lnNodeResponse);
-```
-
 ### Client side
 
-```js
-import { slashtagsPayClient } from './index.js';
-// Pass the slashtag to the client side somehow
-const response = await slashtagsPayClient(slashtag);
+```bash
+slashpay
 ```
+
+### Server side
+
+This repo provides a way to resolve a Slashtag to a hyperswarm DHT server, but does not implement the payment methods logic.
+
+Check how to configure the full server at the [demo server ](https://github.com/synonymdev/slash-pay-demo-server)
