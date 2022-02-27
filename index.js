@@ -2,13 +2,13 @@ import { DHT } from 'dht-universal';
 import Hyperswarm from 'hyperswarm';
 import Corestore from 'corestore';
 import { formatDidUri, parseDidUri } from './url-utils.js';
-import RAM from 'random-access-memory';
 import b4a from 'b4a';
 import chalk from 'chalk';
 import cliSpinners from 'cli-spinners';
 import logUpdate from 'log-update';
 import inquirer from 'inquirer';
 import fs from 'fs';
+import QRCode from 'qrcode';
 
 export const slashtagsPayServer = async (callback) => {
   const dht = await DHT.create({});
@@ -71,7 +71,10 @@ export const slashtagsPayServer = async (callback) => {
     '\n>> Added the new address to:\n   ',
     chalk.yellow.bold(slashtag),
   );
-  return slashtag;
+
+  QRCode.toString(slashtag, {}, (err, url) => {
+    console.log(chalk.bgBlack.rgb(255, 165, 0)(url));
+  });
 };
 
 export const slashtagsPayClient = async () => {
@@ -156,13 +159,13 @@ export const slashtagsPayClient = async () => {
   const core = corestore.get({ key, valueEncoding: 'json' });
   await core.ready();
 
+  const spinner = cliSpinners['moon'];
   if (core.length === 0 || skipCache.toLowerCase() === 'y') {
     const timerLabel = '         resolved in';
     console.time(timerLabel);
     await swarm.join(core.discoveryKey, { server: false, client: true });
-    const spinner = cliSpinners['moon'];
-    let i = 0;
 
+    let i = 0;
     const interval = setInterval(() => {
       const { frames } = spinner;
       logUpdate('   ' + frames[(i = ++i % frames.length)] + ' Resolving...');
@@ -226,11 +229,16 @@ export const slashtagsPayClient = async () => {
       noiseSocket.on('data', (data) => {
         const response = JSON.parse(data.toString());
 
+        let i = 0;
+        let interval;
+
         if (response.error === true) {
           console.log('\n>> Got an error:\n   ', chalk.bold.red(response.data));
           resolve(response.data.toString());
           return;
         } else if (response.orderId !== undefined) {
+          if (interval) clearInterval(interval);
+
           console.log(
             '\n>> Got a receipt for:',
             chalk.green.bold(amount),
@@ -242,13 +250,22 @@ export const slashtagsPayClient = async () => {
           );
           resolve(response.data.toString());
           return;
+        } else {
+          interval = setInterval(() => {
+            const { frames } = spinner;
+            logUpdate(
+              '   ' +
+                frames[(i = ++i % frames.length)] +
+                ' waiting for payment...',
+            );
+          }, spinner.interval);
+          console.log(
+            '\n>> Got ',
+            chalk.bold.green(response.method),
+            ':\n   ',
+            chalk.bold.green(response.data),
+          );
         }
-        console.log(
-          '\n>> Got ',
-          chalk.bold.green(response.method),
-          ':\n   ',
-          chalk.bold.green(response.data),
-        );
       });
     });
   });
