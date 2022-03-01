@@ -4,6 +4,10 @@
   "description": "",
   "type": "module",
   "main": "index.js",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/synonymdev/slashpay-istanbul-hackday.git"
+  },
   "bin": {
     "slashpay": "./client.js"
   },
