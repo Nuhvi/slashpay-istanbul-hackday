@@ -265,6 +265,7 @@ export const slashtagsPayClient = async () => {
             ':\n   ',
             chalk.bold.green(response.data),
           );
+          console.log('\n');
         }
       });
     });
