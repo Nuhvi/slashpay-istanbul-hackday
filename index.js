@@ -125,7 +125,7 @@ export const slashtagsPayClient = async () => {
     },
   ]);
 
-  const dht = await DHT.create({ relays: ['wss://dht-relay.synonym.to'] });
+  const dht = await DHT.create({});
   const corestore = new Corestore('client-store');
   await corestore.ready();
   const swarm = new Hyperswarm({ dht });
