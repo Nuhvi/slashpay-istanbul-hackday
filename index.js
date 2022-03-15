@@ -1,7 +1,7 @@
 import { DHT } from 'dht-universal';
 import Hyperswarm from 'hyperswarm';
 import Corestore from 'corestore';
-import { formatDidUri, parseDidUri } from './url-utils.js';
+import { formatUri, parseUri } from './url-utils.js';
 import b4a from 'b4a';
 import chalk from 'chalk';
 import cliSpinners from 'cli-spinners';
@@ -66,7 +66,7 @@ export const slashtagsPayServer = async (callback) => {
     services: [{ id: '#slashpay', type: 'SlashPay', serviceEndpoint: address }],
   });
 
-  const slashtag = formatDidUri(core.key);
+  const slashtag = formatUri(core.key);
   console.log(
     '\n>> Added the new address to:\n   ',
     chalk.yellow.bold(slashtag),
@@ -117,12 +117,6 @@ export const slashtagsPayClient = async () => {
       message: 'Enter a description',
       default: lasttime.description || 'Parting with my dear sats',
     },
-    {
-      type: 'input',
-      name: 'skipCache',
-      message: 'Skip cache y/N',
-      default: 'N',
-    },
   ]);
 
   const dht = await DHT.create({});
@@ -132,14 +126,8 @@ export const slashtagsPayClient = async () => {
 
   swarm.on('connection', (connection, info) => corestore.replicate(connection));
 
-  const {
-    slashtag,
-    amount,
-    description,
-    skipCache,
-    preferredMethod,
-    fallbackMethod,
-  } = await answers;
+  const { slashtag, amount, description, preferredMethod, fallbackMethod } =
+    await answers;
 
   try {
     fs.writeFile(
@@ -154,32 +142,30 @@ export const slashtagsPayClient = async () => {
     chalk.yellow.bold(slashtag),
   );
 
-  const { key } = parseDidUri(slashtag);
+  const { key } = parseUri(slashtag);
 
   const core = corestore.get({ key, valueEncoding: 'json' });
   await core.ready();
 
   const spinner = cliSpinners['moon'];
-  if (core.length === 0 || skipCache.toLowerCase() === 'y') {
-    const timerLabel = '         resolved in';
-    console.time(timerLabel);
-    await swarm.join(core.discoveryKey, { server: false, client: true });
+  const timerLabel = '         resolved in';
+  console.time(timerLabel);
+  await swarm.join(core.discoveryKey, { server: false, client: true });
 
-    let i = 0;
-    const interval = setInterval(() => {
-      const { frames } = spinner;
-      logUpdate('   ' + frames[(i = ++i % frames.length)] + ' Resolving...');
-    }, spinner.interval);
+  let i = 0;
+  const interval = setInterval(() => {
+    const { frames } = spinner;
+    logUpdate('   ' + frames[(i = ++i % frames.length)] + ' Resolving...');
+  }, spinner.interval);
 
-    await swarm.flush();
-    clearInterval(interval);
-    await core.update();
+  await swarm.flush();
+  clearInterval(interval);
+  await core.update();
 
-    if (core.length === 0) {
-      throw new Error('No slashtags document found for' + slashtag);
-    }
-    console.timeEnd(timerLabel);
+  if (core.length === 0) {
+    throw new Error('No slashtags document found for' + slashtag);
   }
+  console.timeEnd(timerLabel);
 
   const latest = await core.get(core.length - 1);
 
@@ -209,11 +195,7 @@ export const slashtagsPayClient = async () => {
 
   return new Promise((resolve) => {
     noiseSocket.on('error', (error) => {
-      console.log(
-        '>> ',
-        chalk.red.bold(error.message),
-        chalk.red.bold('please try again with skipping cache'),
-      );
+      console.log('>> ', chalk.red.bold(error.message));
       resolve();
     });
 
