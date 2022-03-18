@@ -9,6 +9,7 @@ import logUpdate from 'log-update';
 import inquirer from 'inquirer';
 import fs from 'fs';
 import QRCode from 'qrcode';
+import RAM from 'random-access-memory';
 
 export const slashtagsPayServer = async (callback) => {
   const dht = await DHT.create({});
@@ -120,7 +121,7 @@ export const slashtagsPayClient = async () => {
   ]);
 
   const dht = await DHT.create({});
-  const corestore = new Corestore('client-store');
+  const corestore = new Corestore(RAM);
   await corestore.ready();
   const swarm = new Hyperswarm({ dht });
 
@@ -158,7 +159,18 @@ export const slashtagsPayClient = async () => {
     logUpdate('   ' + frames[(i = ++i % frames.length)] + ' Resolving...');
   }, spinner.interval);
 
-  await swarm.flush();
+  // A hack to wait for at least one connection to be established
+  await new Promise((resolve) => {
+    const timeout = setTimeout(() => {
+      resolve();
+    }, 1000);
+
+    core.on('append', () => {
+      clearTimeout(timeout);
+      resolve();
+    });
+  });
+
   clearInterval(interval);
   await core.update();
 
@@ -170,7 +182,7 @@ export const slashtagsPayClient = async () => {
   const latest = await core.get(core.length - 1);
 
   if (!latest?.services || latest.services.length === 0) {
-    throw new Error('No slashtags services found for' + slashtag);
+    throw new Error('No slashtags services found for: ' + slashtag);
   }
 
   const slashpay = latest.services.find(
