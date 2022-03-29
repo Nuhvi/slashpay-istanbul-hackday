@@ -39,9 +39,9 @@ const main = async () => {
   ]);
 
   sdk = await sdk;
-  debug('Creating slashtag with the name ', 'slashpay-server-owner');
+  debug('Creating slashtag with the name ', 'slashpay-owner');
   const slashtag = await Slashtag.init({
-    name: 'slashpay-server-owner',
+    name: 'slashpay-owner',
     sdk,
     announce: true,
   });

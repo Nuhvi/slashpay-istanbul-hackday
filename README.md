@@ -5,24 +5,35 @@
 ## Install
 
 ```
-npm i -g hackday-slashpay
+npm i
 ```
 
-## Usage
+## example
 
-### Client side
+Run a new SlashPay server
 
-```bash
-slashpay
+```
+$ DEBUG=* node example/server.js
+
+? Use the same server address as last time? No
+  slashpay:server Starting SlashPay server +0ms
+  slashpay:server SlashPay server listening on:  slashpeer://6ef445de1247d377d5acdc8bad69ac07cbd3860ec31492d99804aa6a900fd28d +393ms
 ```
 
-### Server side
+Update the receiver Slashtag with the server address
 
-```js
-const implementation = async (data, onInvoice, onReceipt) => {};
-slashtagsPayServer(implementation);
+```
+$ DEBUG=* node example/wallet.js
+
+? SlashPay server's URL slashpeer://6ef445de1247d377d5acdc8bad69ac07cbd3860ec31492d99804aa6a900fd28d
+
+slashpay:client Updated  slash://7de7sg6t4yyttwcmet22kg32ilfosrcxpgs37jan3mdxcgl7rdrq /.well-known/.slashpay.json : +0ms
 ```
 
-This repo provides a way to resolve a Slashtag to a hyperswarm DHT server, but does not implement the payment methods logic.
+Try to pay to the receiver Slashtag you got from running example/wallet
 
-Check how to configure the full server at the [demo server ](https://github.com/synonymdev/slash-pay-demo-server)
+```
+$ DEBUG=* node example/client.js
+
+? Select a Slashtag to pay slash://7de7sg6t4yyttwcmet22kg32ilfosrcxpgs37jan3mdxcgl7rdrq
+```
